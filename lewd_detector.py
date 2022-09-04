@@ -4,17 +4,17 @@ from nudenet import NudeClassifier
 import cv2
 
 import argparse
+import os 
 
-from collections import deque 
 
 import pprint
 
 
 def proc_opts():
   parser = argparse.ArgumentParser('Lewd detector (NudeNet based)')
-  parser.add_argument('image', default='Image file to read')
+  parser.add_argument('dir', default='Folder to read')
   parser.add_argument('--noviz', default=False, action='store_true')
-  parser.add_argument('--outfile',default=None)
+  parser.add_argument('--outdir',default=None)
   parser.add_argument('--mode',default='base')
   parser.add_argument('--probability', type=float, default=0.1, help='Min probability to consider')
   return parser.parse_args()
@@ -80,11 +80,18 @@ class nudeWrapper():
     img = cv2.imread(image_file) 
     for box in boxes:
       print("Detection {} with probability {}".format(box['label'],box['score']))
-      caption = box['label'].capitalize()# + "@" + str(box['score'])
+      caption = box['label'].capitalize() 
+      score_str =  "{:.2f}".format(box['score'])
       start_corner = (box['box'][0:2])
       end_corner = (box['box'][2:4])
+      bottom_left = (box['box'][0],box['box'][3])
       cv2.putText(img,caption,
           start_corner,
+          cv2.FONT_HERSHEY_COMPLEX,
+          1,
+          (247,153,29 ),
+          2)
+      cv2.putText(img,score_str,bottom_left,
           cv2.FONT_HERSHEY_COMPLEX,
           1,
           (247,153,29 ),
@@ -96,7 +103,7 @@ class nudeWrapper():
         (0,30),
         cv2.FONT_HERSHEY_COMPLEX,
         1,
-        (247,153,29 ),
+        (200,153,29 ),
         2)
     
     txt = "Threshold: {:0.4}".format(threshold)
@@ -115,19 +122,33 @@ class nudeWrapper():
       cv2.waitKey()
   
     if outfile:
+      print("Writing to {}".format(outfile))
       cv2.imwrite(outfile,img)
 
 if __name__=="__main__":
   args = proc_opts()
 
-  lwd = nudeWrapper()
-  boxes = lwd.detect_sketch(args.image,args.probability,args.mode)
-  classification = lwd.classify_sketch(args.image)
+  imgs = []
+  for path in os.scandir(args.dir):
+    if path.is_file():
+      # Todo check if image
+      imgs.append(path.name)
 
-  print(classification)
-  pckg = classification[args.image]
-  lwd.put_bounding_box(args.image,boxes,pckg['unsafe'],
-      args.probability,
-      viz=not args.noviz,outfile=args.outfile)
+  print("Will process the following files")
+  for p in imgs:
+    print(p)
+  lwd = nudeWrapper()
+
+  for path in imgs:
+    img = args.dir + path
+    print("Detecting: {}".format(img))
+    boxes = lwd.detect_sketch(img,args.probability,args.mode)
+    print("Classifying: {}".format(img))
+    classification = lwd.classify_sketch(img)
+    print(classification)
+    pckg = classification[img]
+    lwd.put_bounding_box(img,boxes,pckg['unsafe'],
+        args.probability,
+        viz=False,outfile=args.outdir+"processed_"+path)
 
 
